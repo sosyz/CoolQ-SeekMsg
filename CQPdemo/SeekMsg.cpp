@@ -19,8 +19,8 @@ string GetExePath(void){
 
 //取随机长度字符串
 char *randstr(char *str, const int len){
-	srand((int)time(NULL));
 	int i;
+	srand(time(NULL));
 	for (i = 0; i < len; ++i)
 	{
 		switch ((rand() % 3))

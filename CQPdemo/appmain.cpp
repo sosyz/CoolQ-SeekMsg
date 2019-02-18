@@ -5,7 +5,7 @@
 #include "sqlite3.h"
 
 #include <string>
-
+#include <time.h>
 
 using namespace std;
 int ac = -1; //AuthCode 调用酷Q的方法时需要用到
@@ -15,6 +15,22 @@ string rootKey = "";
 sqlite3* pDB;
 //define database object
 
+bool AllisNum(string str)
+{
+	for (int i = 0; i < str.size(); i++)
+	{
+		int tmp = (int)str[i];
+		if (tmp >= 48 && tmp <= 57)
+		{
+			continue;
+		}
+		else
+		{
+			return false;
+		}
+	}
+	return true;
+}
 
 bool writeConfig(int64_t QQ, string name, string value, bool isAdd = false) {
 	sqlite3_stmt* stmt = NULL;
@@ -27,22 +43,19 @@ bool writeConfig(int64_t QQ, string name, string value, bool isAdd = false) {
 		sqlite3_prepare_v2(pDB, sql.c_str(), sql.length(), &stmt, 0);
 		sqlite3_bind_int64(stmt, 1, QQ);
 		sqlite3_bind_text(stmt, 2, name.c_str(), name.length(), 0);
-		if (sqlite3_step(stmt) == SQLITE_ROW) {
-			data = (char *)sqlite3_column_text(stmt, 0);
-		}
+		data = (char *)sqlite3_column_text(stmt, 0);
 		data = data + value;
 		sqlite3_finalize(stmt);
 	}
 	else {
 		data = value;
 	}
-
 	sql = "SELECT COUNT(`value`) FROM config WHERE `qq` = ? AND `name` = ?";
 	sqlite3_prepare_v2(pDB, sql.c_str(), sql.length(), &stmt, 0);
 	sqlite3_bind_int64(stmt, 1, QQ);
 	sqlite3_bind_text(stmt, 2, name.c_str(), name.length(), 0);
 	sqlite3_step(stmt);
-	int count = sqlite3_data_count(stmt);
+	int count = sqlite3_column_int(stmt,0);
 	sqlite3_finalize(stmt);
 	if (count == 1) {
 		sql = "UPDATE config SET value = ? WHERE `qq` = ? AND `name` = ?";
@@ -50,12 +63,17 @@ bool writeConfig(int64_t QQ, string name, string value, bool isAdd = false) {
 	else {
 		sql = "INSERT INTO config(`value`,`qq`,`name`) VALUES(?,?,?)";
 	}
+	sqlite3_prepare_v2(pDB, sql.c_str(), sql.length(), &stmt, 0);
 	sqlite3_bind_text(stmt, 1, data.c_str(), data.length(), 0);
 	sqlite3_bind_int64(stmt, 2, QQ);
 	sqlite3_bind_text(stmt, 3, name.c_str(), name.length(), 0);
-	bool b = sqlite3_step(stmt) == SQLITE_DONE;
+	int s = sqlite3_step(stmt);
+	if (s != SQLITE_DONE)
+	{
+		CQ_addLog(ac, CQLOG_DEBUG, "WRITERETURN", to_string(s).c_str());
+	}
 	sqlite3_finalize(stmt);
-	return b;
+	return s == SQLITE_DONE;
 }
 
 string readConfig(const int64_t QQ, const string name) {
@@ -63,13 +81,19 @@ string readConfig(const int64_t QQ, const string name) {
 	string sql = "";
 	string data = ""; 
 
-	sql = "SELECT count(value) FROM config WHERE `qq` = ? AND `name` = ?";
+	sql = "SELECT `value` FROM config WHERE `qq` = ? AND `name` = ?";
 	sqlite3_prepare_v2(pDB, sql.c_str(), sql.length(), &stmt, 0);
 	sqlite3_bind_int64(stmt, 1, QQ);
 	sqlite3_bind_text(stmt, 2, name.c_str(), name.length(), 0);
-	if (sqlite3_step(stmt) == SQLITE_ROW) {
+	int s = sqlite3_step(stmt);
+	if (s == SQLITE_ROW) {
 		data = (char *)sqlite3_column_text(stmt, 0);
 	}
+	else {
+		CQ_addLog(ac, CQLOG_DEBUG, "READRETURN", to_string(s).c_str());
+	}
+	sqlite3_finalize(stmt);
+	CQ_addLog(ac, CQLOG_DEBUG, "SELECTDATA", data.c_str());
 	return data;
 }
 
@@ -147,6 +171,7 @@ CQEVENT(int32_t, __eventExit, 0)() {
 * 如非必要，不建议在这里加载窗口。（可以添加菜单，让用户手动打开窗口）
 */
 CQEVENT(int32_t, __eventEnable, 0)() {
+	
 	string sql = "";
 	sqlite3_stmt* stmt;
 	string content = "";
@@ -156,9 +181,7 @@ CQEVENT(int32_t, __eventEnable, 0)() {
 	sqlite3_step(stmt);
 	int num = sqlite3_column_int(stmt, 0);
 	sqlite3_finalize(stmt);
-	CQ_addLog(ac, CQLOG_DEBUG, "ERREO", to_string(num).c_str());
 	if (num == 0) {
-		char temp[8];
 		sql = "CREATE TABLE \"config\" (\"id\" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,\"qq\" integer,\"name\" TEXT,\"value\" TEXT);";
 		char* error;
 		if (sqlite3_exec(pDB, sql.c_str(), 0, 0, &error) != SQLITE_OK) {
@@ -168,6 +191,7 @@ CQEVENT(int32_t, __eventEnable, 0)() {
 			CQ_addLog(ac, CQLOG_ERROR, "初始化", "初始化失败，插件无法正常运行，详细错误信息见调试");
 		}
 		else {
+			char temp[9] = { 0 };
 			rootKey = randstr(temp, 8);
 			content = "检测到是第一次运行，请向机器人私聊发送\"#";
 			content.append(rootKey);
@@ -202,6 +226,7 @@ CQEVENT(int32_t, __eventPrivateMsg, 24)(int32_t subType, int32_t msgId, int64_t 
 	//如果不回复消息，交由之后的应用/过滤器处理，这里 return EVENT_IGNORE - 忽略本条消息
 	string msg = fromMsg;
 	if (rootKey != "") {
+		CQ_addLog(ac, CQLOG_DEBUG, "ROOTKEY", rootKey.c_str());
 		string_replace(msg, "\r", "");
 		string_replace(msg, "\n", "");
 		string_replace(msg, " ", "");
@@ -213,7 +238,8 @@ CQEVENT(int32_t, __eventPrivateMsg, 24)(int32_t subType, int32_t msgId, int64_t 
 			return EVENT_BLOCK;
 		}
 
-		int rootState = stoi(readConfig(0, "rootState"));
+		int rootState = strtol(readConfig(0, "rootState").c_str(), NULL, 0);
+		CQ_addLog(ac, CQLOG_DEBUG, "rootState", to_string(rootState).c_str());
 		if (rootState != 0 && msg == "退出") {
 			execSQL("DELETE FROM config WHERE qq = 0");
 			CQ_sendPrivateMsg(ac, fromQQ, "已退出设置模式");
@@ -221,6 +247,7 @@ CQEVENT(int32_t, __eventPrivateMsg, 24)(int32_t subType, int32_t msgId, int64_t 
 		}
 
 		if (readConfig(0, "tempAdmin") == to_string(fromQQ)) {
+			CQ_addLog(ac, CQLOG_DEBUG, "if", "true");
 			switch (rootState)
 			{
 			case 1:
@@ -234,7 +261,7 @@ CQEVENT(int32_t, __eventPrivateMsg, 24)(int32_t subType, int32_t msgId, int64_t 
 
 					CQ_sendPrivateMsg(ac, fromQQ, outMsg.c_str());
 					CQ_sendPrivateMsg(ac, fromQQ, "请选择查询权限模式：\n[1]允许所有人进行查询\n[2]仅回复开通查询权限的人");
-				}else if(stoi(msg) > 10000) {
+				}else if(strtol(msg.c_str(), NULL, 0)) {
 					writeConfig(0, "admin", msg);
 					string outMsg;
 					outMsg.append("已将");
@@ -249,7 +276,7 @@ CQEVENT(int32_t, __eventPrivateMsg, 24)(int32_t subType, int32_t msgId, int64_t 
 				}
 				break;
 			case 2:
-				switch (stoi(msg))
+				switch (strtol(msg.c_str(), NULL, 0))
 				{
 				case 1:
 					delectConfig(0, "rootState");
@@ -267,12 +294,12 @@ CQEVENT(int32_t, __eventPrivateMsg, 24)(int32_t subType, int32_t msgId, int64_t 
 					CQ_sendPrivateMsg(ac, fromQQ, "错误的回复，请重新发送，或者发送\"退出\"退出设置，需要注意的是，此操作会使您无法使用本插件");
 				}
 			}
+			return EVENT_BLOCK;
 		}
-		return EVENT_BLOCK;
 	}
 	
 	if (msg == "进入查询") {
-		int mode = stoi(readConfig(0, "mode"));
+		int mode = strtol(readConfig(0, "mode").c_str(), NULL, 0);
 		switch (mode)
 		{
 		case 1:
