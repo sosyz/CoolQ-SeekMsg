@@ -287,6 +287,7 @@ CQEVENT(int32_t, __eventPrivateMsg, 24)(int32_t subType, int32_t msgId, int64_t 
 					writeConfig(0, "mode", "2");
 					writeConfig(0, "useList", "");
 					rootKey = "";
+					//设置结束
 					CQ_sendPrivateMsg(ac, fromQQ, "设置成功，仅回复开通查询权限的，您可以发送\"开通[QQ]\"进行添加，如\"开通10000\"，初始化设置到此结束");
 					break;
 				default:
