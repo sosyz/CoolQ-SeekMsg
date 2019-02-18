@@ -258,7 +258,6 @@ CQEVENT(int32_t, __eventPrivateMsg, 24)(int32_t subType, int32_t msgId, int64_t 
 					outMsg.append("已将");
 					outMsg.append(to_string(fromQQ));
 					outMsg.append("设为管理员，进入下一项设置");
-
 					CQ_sendPrivateMsg(ac, fromQQ, outMsg.c_str());
 					CQ_sendPrivateMsg(ac, fromQQ, "请选择查询权限模式：\n[1]允许所有人进行查询\n[2]仅回复开通查询权限的人");
 				}else if(strtol(msg.c_str(), NULL, 0)) {
