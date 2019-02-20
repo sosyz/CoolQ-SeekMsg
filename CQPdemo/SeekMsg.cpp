@@ -243,8 +243,8 @@ string msgToHtml(msgInfo info) {
 string seekMsg(int32_t ac, string Group, string QQ, string Num, string timeStart,string timeEnd) {
 	sqlite3* pDB;
 	sqlite3_stmt* stmt;
-	StringBuffer s;
-	Writer<StringBuffer> writer(s);
+	StringBuffer jsonBuffer;
+	Writer<StringBuffer> writer(jsonBuffer);
 	string sql = "";
 	string logFile = GetRunningPath() + "\\data\\" + to_string(CQ_getLoginQQ(ac)) + "\\logv1.db";
 	string detail = "";
@@ -330,8 +330,8 @@ string seekMsg(int32_t ac, string Group, string QQ, string Num, string timeStart
 			break;
 		}
 		writer.EndArray();
-		string json = s.GetString();
 	}
 	writer.EndObject();
+	string json = jsonBuffer.GetString();
 	int s = sqlite3_step(stmt);
 }
