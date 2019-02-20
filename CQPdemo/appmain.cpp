@@ -13,23 +13,11 @@ string appDirectory;
 string cfgDirectory;
 string rootKey = "";
 sqlite3* pDB;
-//define database object
 
+//对于字符串为0时无法判断
 bool AllisNum(string str)
 {
-	for (int i = 0; i < str.size(); i++)
-	{
-		int tmp = (int)str[i];
-		if (tmp >= 48 && tmp <= 57)
-		{
-			continue;
-		}
-		else
-		{
-			return false;
-		}
-	}
-	return true;
+	return strtol(str.c_str(), NULL, NULL) != 0;
 }
 
 bool writeConfig(int64_t QQ, string name, string value, bool isAdd = false) {
@@ -93,7 +81,6 @@ string readConfig(const int64_t QQ, const string name) {
 		CQ_addLog(ac, CQLOG_DEBUG, "READRETURN", to_string(s).c_str());
 	}
 	sqlite3_finalize(stmt);
-	CQ_addLog(ac, CQLOG_DEBUG, "SELECTDATA", data.c_str());
 	return data;
 }
 
@@ -150,6 +137,7 @@ CQEVENT(int32_t, Initialize, 4)(int32_t AuthCode) {
 CQEVENT(int32_t, __eventStartup, 0)() {
 	appDirectory = CQ_getAppDirectory(ac);
 	cfgDirectory = appDirectory + "config.db";
+	CQ_addLog(ac, CQLOG_DEBUG, "runName", GetRunningPath().c_str());
 	return 0;
 }
 
@@ -225,8 +213,85 @@ CQEVENT(int32_t, __eventPrivateMsg, 24)(int32_t subType, int32_t msgId, int64_t 
 	//如果要回复消息，请调用酷Q方法发送，并且这里 return EVENT_BLOCK - 截断本条消息，不再继续处理  注意：应用优先级设置为"最高"(10000)时，不得使用本返回值
 	//如果不回复消息，交由之后的应用/过滤器处理，这里 return EVENT_IGNORE - 忽略本条消息
 	string msg = fromMsg;
-	if (rootKey != "") {
-		CQ_addLog(ac, CQLOG_DEBUG, "ROOTKEY", rootKey.c_str());
+	int qqState = strtol(readConfig(fromQQ, "userState").c_str(), NULL, NULL);
+
+	if (qqState != 0) {
+		if (msg == "退出查询") {
+			string sql = "";
+			sql = "DELETE FROM config WHERE `qq` = ";
+			sql.append(to_string(fromQQ));
+			sql.append(" AND `name` IN ('userState','commandGroup','commandQQ','commandTime','commandNum');");
+			execSQL(sql);
+			CQ_sendPrivateMsg(ac, fromQQ, "您已退出查询功能");
+		}
+		
+		switch (qqState)
+		{
+		case 1:
+			if (AllisNum(msg)) {
+				writeConfig(fromQQ, "userState", "2");
+				writeConfig(fromQQ, "commandGroup", msg);
+				CQ_sendPrivateMsg(ac, fromQQ, "请发送您要查询的QQ(不限制填发送\"-1\")");
+			}
+			else {
+				CQ_sendPrivateMsg(ac, fromQQ, "错误的参数，原因：非纯数字，请发送QQ（仅数字部分）或发送\"退出\"退出查询");
+			}
+			break;
+		case 2:
+			if (AllisNum(msg)) {
+				writeConfig(fromQQ, "userState", "3");
+				writeConfig(fromQQ, "commandQQ", msg);
+				CQ_sendPrivateMsg(ac, fromQQ, "请发送您要查询的数量");
+			}
+			else {
+				CQ_sendPrivateMsg(ac, fromQQ, "错误的参数，原因：非纯数字，请发送QQ（仅数字部分）或发送\"退出\"退出查询");
+			}
+			break;
+		case 3:
+			if (AllisNum(msg)) {
+				writeConfig(fromQQ, "userState", "4");
+				writeConfig(fromQQ, "commandNum", msg);
+				CQ_sendPrivateMsg(ac, fromQQ, "请发送您要查询的时间(支持)\"昨天\"、\"今天\"、\"XXXX年X月X日XX时XX分(到或-)XXXX年X月X日XX时XX分\"");
+			}
+			else {
+				CQ_sendPrivateMsg(ac, fromQQ, "错误的参数，原因：非纯数字，请发送QQ（仅数字部分）或发送\"退出\"退出查询");
+			} 
+			break;
+		case 4:{
+			sqlite3_stmt* stmt;
+			string sql = "";
+			string tempGroup;
+			string tempNum;
+			string tempQQ;
+			string start;
+			string end;
+			sql = "SELECT value FROM config WHERE name IN ('commandGroup', 'commandQQ', 'commandNum') AND `qq` = ? ORDER BY name ASC";
+			sqlite3_prepare_v2(pDB, sql.c_str(), sql.length(), &stmt, 0);
+			sqlite3_bind_int64(stmt, 1, fromQQ);
+			int s = sqlite3_step(stmt);
+			if (s == SQLITE_ROW) {
+				tempGroup = (char *)sqlite3_column_text(stmt, 0);
+				sqlite3_step(stmt);
+				tempNum = (char *)sqlite3_column_text(stmt, 0);
+				sqlite3_step(stmt);
+				tempQQ = (char *)sqlite3_column_text(stmt, 0);
+			}
+			else {
+				CQ_addLog(ac, CQLOG_DEBUG, "READRETURN", to_string(s).c_str());
+			}
+			sqlite3_finalize(stmt);
+
+			//添加时间处理
+			//时间转时间戳
+			seekMsg(ac,tempGroup, tempQQ, tempNum, start, end);
+			break;
+		}
+		default:
+			CQ_sendPrivateMsg(ac, fromQQ, "功能发生错误，请发送\"退出查询\"来退出功能");
+			break;
+		}
+
+	}else if (rootKey != "") {
 		string_replace(msg, "\r", "");
 		string_replace(msg, "\n", "");
 		string_replace(msg, " ", "");
@@ -238,7 +303,7 @@ CQEVENT(int32_t, __eventPrivateMsg, 24)(int32_t subType, int32_t msgId, int64_t 
 			return EVENT_BLOCK;
 		}
 
-		int rootState = strtol(readConfig(0, "rootState").c_str(), NULL, 0);
+		int rootState = strtol(readConfig(0, "rootState").c_str(), NULL, NULL);
 		CQ_addLog(ac, CQLOG_DEBUG, "rootState", to_string(rootState).c_str());
 		if (rootState != 0 && msg == "退出") {
 			execSQL("DELETE FROM config WHERE qq = 0");
@@ -260,7 +325,7 @@ CQEVENT(int32_t, __eventPrivateMsg, 24)(int32_t subType, int32_t msgId, int64_t 
 					outMsg.append("设为管理员，进入下一项设置");
 					CQ_sendPrivateMsg(ac, fromQQ, outMsg.c_str());
 					CQ_sendPrivateMsg(ac, fromQQ, "请选择查询权限模式：\n[1]允许所有人进行查询\n[2]仅回复开通查询权限的人");
-				}else if(strtol(msg.c_str(), NULL, 0)) {
+				}else if(strtol(msg.c_str(), NULL, NULL)) {
 					writeConfig(0, "admin", msg);
 					string outMsg;
 					outMsg.append("已将");
@@ -275,7 +340,7 @@ CQEVENT(int32_t, __eventPrivateMsg, 24)(int32_t subType, int32_t msgId, int64_t 
 				}
 				break;
 			case 2:
-				switch (strtol(msg.c_str(), NULL, 0))
+				switch (strtol(msg.c_str(), NULL, NULL))
 				{
 				case 1:
 					delectConfig(0, "rootState");
@@ -284,6 +349,7 @@ CQEVENT(int32_t, __eventPrivateMsg, 24)(int32_t subType, int32_t msgId, int64_t 
 					break;
 				case 2:
 					delectConfig(0, "rootState");
+					delectConfig(0, "tempAdmin");
 					writeConfig(0, "mode", "2");
 					writeConfig(0, "useList", "");
 					rootKey = "";
@@ -299,7 +365,8 @@ CQEVENT(int32_t, __eventPrivateMsg, 24)(int32_t subType, int32_t msgId, int64_t 
 	}
 	
 	if (msg == "进入查询") {
-		int mode = strtol(readConfig(0, "mode").c_str(), NULL, 0);
+		int mode = strtol(readConfig(0, "mode").c_str(), NULL, NULL);
+		CQ_addLog(ac, CQLOG_DEBUG, "SELECTDATA", to_string(mode).c_str());
 		switch (mode)
 		{
 		case 1:
