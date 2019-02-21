@@ -102,7 +102,9 @@ string base64_decode(string const& encoded_string) {
 }
 
 string GetRunningPath() {
-	string fileName = _pgmptr;
+	char* str = 0;
+	_get_pgmptr(&str);
+	string fileName = str;
 	fileName.substr(0, fileName.find_last_of("/\\"));
 	return fileName;
 }
@@ -195,7 +197,7 @@ int getType(string type) {
 //根据名取CQ码值
 string getValue(string CQStr, char name) {
 	smatch result;
-	regex pattern(name + "=([^(,|\])]*)");
+	regex pattern(name + "=([^(,|\\])]*)");
 	if (regex_match(CQStr, result, pattern)) {
 		return result[1];
 	}
@@ -204,13 +206,13 @@ string getValue(string CQStr, char name) {
 msgInfo getInfo(string detail) {
 	smatch result;
 	msgInfo info;
-	regex pattern("群:\s*(\d+)[\s\S]*?QQ:\s*(\d+)\s*\n{0,}([\s\S]*)");
+	regex pattern("群:\\s*(\\d+)[\\s\\S]*?QQ:\\s*(\\d+)\\s*\\n{0,}([\\s\\S]*)");
 	if (regex_match(detail, result, pattern)) {
 		info.Group = result[1];
 		info.QQ = result[2];
 		info.Msg = result[3];
-		return info;
 	}
+	return info;
 }
 
 string getName(int32_t ac, string group, string qq) {
@@ -236,7 +238,7 @@ string getName(int32_t ac, string group, string qq) {
 }
 
 string msgToHtml(msgInfo info) {
-
+	return "";
 }
 
 //查询记录
@@ -334,4 +336,5 @@ string seekMsg(int32_t ac, string Group, string QQ, string Num, string timeStart
 	writer.EndObject();
 	string json = jsonBuffer.GetString();
 	int s = sqlite3_step(stmt);
+	return "";
 }
