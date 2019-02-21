@@ -2,6 +2,8 @@
 
 using namespace std;
 
+tm GetDayTime(time_t time);
+
 //取运行目录
 string GetRunningPath(void);
 

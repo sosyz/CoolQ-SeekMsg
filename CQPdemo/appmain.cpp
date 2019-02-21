@@ -6,6 +6,7 @@
 
 #include <string>
 #include <time.h>
+#include<regex>
 
 using namespace std;
 int ac = -1; //AuthCode 调用酷Q的方法时需要用到
@@ -274,6 +275,7 @@ CQEVENT(int32_t, __eventPrivateMsg, 24)(int32_t subType, int32_t msgId, int64_t 
 				sqlite3_step(stmt);
 				tempNum = (char *)sqlite3_column_text(stmt, 0);
 				sqlite3_step(stmt);
+				randombytes_sysrandom_buf();
 				tempQQ = (char *)sqlite3_column_text(stmt, 0);
 			}
 			else {
@@ -281,9 +283,110 @@ CQEVENT(int32_t, __eventPrivateMsg, 24)(int32_t subType, int32_t msgId, int64_t 
 			}
 			sqlite3_finalize(stmt);
 
+			/*
+			int tm_sec; // 秒 – 取值区间为[0,59] 
+
+			int tm_min; // 分 - 取值区间为[0,59] 
+
+			int tm_hour;// 时 - 取值区间为[0,23] 
+
+			int tm_mday; // 一个月中的日期 - 取值区间为[1,31] 
+
+			int tm_mon;// 月份（从一月开始，0代表一月） - 取值区间为[0,11]
+
+			int tm_year; // 年份，其值等于实际年份减去1900 
+
+			int tm_wday; // 星期 – 取值区间为[0,6]，其中0代表星期天，1代表星期一，以此类推 
+
+			int tm_yday; // 从每年的1月1日开始的天数 – 取值区间为[0,365]，其中0代表1月1日，1代表1月2日，以此类推 
+
+			int tm_isdst; // 夏令时标识符，实行夏令时的时候，tm_isdst为正。不实行夏令时的进候，tm_isdst为0；不了解情况时，tm_isdst()为负。
+			*/
+			tm _time;
+			int year, month, day, hour, minute, second;
+			sscanf_s(msg.c_str(), "%d/%d/%d/ %d:%d:%d", &year, &month, &day, &hour, &minute, &second);
+			tm t = GetDayTime(time(NULL));
+
 			//添加时间处理
-			//时间转时间戳
-			seekMsg(ac,tempGroup, tempQQ, tempNum, start, end);
+			if (msg == "今天") {
+
+
+				_time.tm_year = t.tm_year;
+				_time.tm_mon = t.tm_mon;
+				_time.tm_mday = t.tm_mday;
+				_time.tm_hour = 0;
+				_time.tm_min = 0;
+				_time.tm_sec = 0;
+				_time.tm_isdst = 0;
+
+				start = to_string(mktime(&_time));
+				_time.tm_mday = t.tm_mday + 1;
+				end = to_string(mktime(&_time));
+			}
+			else if (msg == "昨天") {
+				_time.tm_year = t.tm_year;
+				_time.tm_mon = t.tm_mon;
+				_time.tm_mday = t.tm_mday - 1;
+				_time.tm_hour = 0;
+				_time.tm_min = 0;
+				_time.tm_sec = 0;
+				_time.tm_isdst = 0;
+
+				start = to_string(mktime(&_time));
+				_time.tm_mday = t.tm_mday;
+				end = to_string(mktime(&_time));
+			}
+			else {
+				smatch result;
+				regex pattern("(.+)\\s*(到|-)\\s*(.+)");
+				if (regex_match(msg, result, pattern)) {
+					string time_;
+					time_ = result[1];
+					sscanf_s(time_.c_str(), "%d/%d/%d/ %d:%d:%d", &year, &month, &day, &hour, &minute, &second);
+
+					if (year != 0 && month != 0 && day != 0) {
+						_time.tm_year = year - 1900;
+						_time.tm_mon = month - 1;
+						_time.tm_mday = day;
+						
+						if (hour == 0)hour = 0;
+						if (minute == 0)minute = 0;
+						if (second == 0)second = 0;
+
+						_time.tm_hour = hour;
+						_time.tm_min = minute;
+						_time.tm_sec = second;
+						_time.tm_isdst = 0;
+
+						start = to_string(mktime(&_time));
+
+						time_ = result[2];
+						sscanf_s(time_.c_str(), "%d/%d/%d/ %d:%d:%d", &year, &month, &day, &hour, &minute, &second);
+
+						_time.tm_year = year - 1900;
+						_time.tm_mon = month - 1;
+						_time.tm_mday = day;
+
+						if (hour == 0)hour = 0;
+						if (minute == 0)minute = 0;
+						if (second == 0)second = 0;
+
+						_time.tm_hour = hour;
+						_time.tm_min = minute;
+						_time.tm_sec = second;
+						_time.tm_isdst = 0;
+
+						end = to_string(mktime(&_time));
+
+						seekMsg(ac, tempGroup, tempQQ, tempNum, start, end);
+					}
+					else {
+						CQ_sendPrivateMsg(ac, fromQQ, "错误的参数，原因：时间格式错误，请参考提示输入，例如\"2019/1/1 [00:00]到2019/1/2 [00:00]\"查询2019年1月1日到2019年1月2日的记录\
+\"[]\"包括的内容意为可留空");
+					}
+				}
+			}
+			
 			break;
 		}
 		default:

@@ -1,7 +1,8 @@
 #include <string>
 #include <Windows.h>
 #include <time.h>
-#include<regex>
+#include <regex>
+#include <iostream>
 
 #include "cqp.h"
 #include "SeekMsg.h"
@@ -9,7 +10,7 @@
 #include "Unpack.h"
 #include "rapidjson/writer.h"
 #include "rapidjson/stringbuffer.h"
-#include <iostream>
+
 
 using namespace rapidjson;
 using namespace std;
@@ -20,6 +21,15 @@ struct msgInfo
 	string QQ;
 	string Msg;
 };
+
+tm GetDayTime(time_t time)
+{
+	struct tm * ptimeDetail;
+	struct tm timeDetail;
+	ptimeDetail = localtime(&time);
+	memcpy(&timeDetail, ptimeDetail, sizeof(tm));
+	return timeDetail;
+}
 
 unsigned char ToHex(unsigned char x)
 {
