@@ -21,3 +21,6 @@ string seekMsg(int ac, string Group, string QQ, string Num, string timeStaat, st
 
 //子文本替换
 void string_replace(std::string &strBig, const std::string &strsrc, const std::string &strdst);
+
+//设置ac
+void setAuthCode(int ac);

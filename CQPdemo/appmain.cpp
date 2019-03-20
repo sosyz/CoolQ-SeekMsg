@@ -2,7 +2,7 @@
 #include "cqp.h"
 #include "appmain.h"
 #include "SeekMsg.h"
-#include "sqlite3.h"
+#include "sqlite3/sqlite3.h"
 
 #include <string>
 #include <time.h>
@@ -137,6 +137,7 @@ CQEVENT(int32_t, Initialize, 4)(int32_t AuthCode) {
 */
 CQEVENT(int32_t, __eventStartup, 0)() {
 	appDirectory = CQ_getAppDirectory(ac);
+	setAuthCode(ac);
 	cfgDirectory = appDirectory + "config.db";
 	CQ_addLog(ac, CQLOG_DEBUG, "runName", GetRunningPath().c_str());
 	return 0;
@@ -275,7 +276,6 @@ CQEVENT(int32_t, __eventPrivateMsg, 24)(int32_t subType, int32_t msgId, int64_t 
 				sqlite3_step(stmt);
 				tempNum = (char *)sqlite3_column_text(stmt, 0);
 				sqlite3_step(stmt);
-				randombytes_sysrandom_buf();
 				tempQQ = (char *)sqlite3_column_text(stmt, 0);
 			}
 			else {
